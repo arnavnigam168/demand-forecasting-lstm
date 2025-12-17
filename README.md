@@ -190,7 +190,12 @@ Typical performance on retail sales data:
 
 ## License
 
-This project is open source and available for educational and commercial use.
+This project is licensed under the **MIT License**.
+
+You are free to use, modify, and distribute this project for educational and non-commercial purposes, provided that proper credit is given to the original author.
+
+See the [LICENSE](./LICENSE) file for full details.
+
 
 ## Author
 
