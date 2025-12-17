@@ -115,7 +115,7 @@ def main():
         st.pyplot(plot_forecast(df, forecast_df))
         st.dataframe(forecast_df, use_container_width=True)
 
-        metrics = evaluate_forecast(df, forecast_df, test_size=min(30, len(df)))
+        metrics = evaluate_forecast(df, forecast_df, test_size=len(forecast_df))
 
         m1, m2, m3, m4 = st.columns(4)
         m1.metric("RMSE", f"{metrics['RMSE']:.2f}")
