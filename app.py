@@ -2,9 +2,7 @@ import streamlit as st
 import pandas as pd
 import matplotlib.pyplot as plt
 from pathlib import Path
-from tensorflow.keras.models import load_model
-import joblib
-
+import numpy as np
 from src.train_model import forecast
 from src.evaluate import evaluate_forecast
 
@@ -15,9 +13,6 @@ st.set_page_config(
 
 BASE_DIR = Path(__file__).resolve().parent
 DATA_PATH = BASE_DIR / "data" / "sales_data.csv"
-MODEL_PATH = BASE_DIR / "models" / "lstm_model.keras"
-SCALER_PATH = BASE_DIR / "models" / "scaler.pkl"
-META_PATH = BASE_DIR / "models" / "meta.pkl"
 
 st.title("Retail Demand Forecasting Dashboard")
 st.markdown("---")
@@ -30,14 +25,6 @@ def load_data():
     df["Date"] = pd.to_datetime(df["Date"])
     df = df.sort_values("Date").reset_index(drop=True)
     return df
-
-def load_model_artifacts():
-    if not MODEL_PATH.exists() or not SCALER_PATH.exists():
-        return None, None, None
-    model = load_model(MODEL_PATH, compile=False)
-    scaler = joblib.load(SCALER_PATH)
-    meta = joblib.load(META_PATH) if META_PATH.exists() else {"lookback": 14}
-    return model, scaler, meta
 
 def plot_forecast(df, forecast_df):
     fig, ax = plt.subplots(figsize=(14, 6))
@@ -57,19 +44,45 @@ def plot_forecast(df, forecast_df):
     ax.grid(alpha=0.3)
     return fig
 
+@st.cache_resource
+def train_model_on_start(df):
+    from sklearn.preprocessing import MinMaxScaler
+    from tensorflow.keras.models import Sequential
+    from tensorflow.keras.layers import LSTM, Dense
+
+    values = df["Sales"].values.reshape(-1, 1)
+
+    scaler = MinMaxScaler()
+    scaled = scaler.fit_transform(values)
+
+    lookback = 14
+    X, y = [], []
+
+    for i in range(lookback, len(scaled)):
+        X.append(scaled[i - lookback:i, 0])
+        y.append(scaled[i, 0])
+
+    X, y = np.array(X), np.array(y)
+    X = X.reshape((X.shape[0], X.shape[1], 1))
+
+    model = Sequential([
+        LSTM(50, activation="relu", input_shape=(lookback, 1)),
+        Dense(1)
+    ])
+
+    model.compile(optimizer="adam", loss="mse")
+    model.fit(X, y, epochs=10, batch_size=16, verbose=0)
+
+    return model, scaler, lookback
+
 def main():
     df = load_data()
-    model, scaler, meta = load_model_artifacts()
 
     if df is None:
         st.error("sales_data.csv not found")
         st.stop()
 
-    if model is None:
-        st.error("trained model not found")
-        st.stop()
-
-    lookback = int(meta.get("lookback", 14))
+    model, scaler, lookback = train_model_on_start(df)
 
     c1, c2, c3, c4 = st.columns(4)
     c1.metric("Total Records", len(df))
@@ -111,7 +124,6 @@ def main():
         m4.metric("Forecast Accuracy", f"{metrics['Forecast Accuracy (%)']:.2f}%")
 
     st.markdown("---")
-
     st.subheader("Historical Sales Trend")
     st.line_chart(df.set_index("Date")["Sales"])
 
